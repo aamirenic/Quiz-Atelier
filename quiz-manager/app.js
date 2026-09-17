@@ -91,14 +91,14 @@ function consentState() {
 /* Dashboard greetings — one is picked at sign-in, then the pool rotates
    on every return to the dashboard. */
 const GREETINGS = [
-  () => `${timeHello()}, ${state.user.name}`,
-  () => `How's the weather today, ${state.user.name}?`,
-  () => `Welcome back, ${state.user.name}!`,
-  () => `Back to it, ${state.user.name}.`,
-  () => `${state.user.role === "student" ? "Ready to learn" : "Ready to teach"}, ${state.user.name}?`,
-  () => `Great to see you, ${state.user.name}.`,
-  () => `Let's make today count, ${state.user.name}.`,
-  () => `Quizzes await, ${state.user.name}.`,
+  () => `${timeHello()}, ${state.user?.name ?? "there"}`,
+  () => `How's the weather today, ${state.user?.name ?? "there"}?`,
+  () => `Welcome back, ${state.user?.name ?? "there"}!`,
+  () => `Back to it, ${state.user?.name ?? "there"}.`,
+  () => `${state.user?.role === "student" ? "Ready to learn" : "Ready to teach"}, ${state.user?.name ?? "there"}?`,
+  () => `Great to see you, ${state.user?.name ?? "there"}.`,
+  () => `Let's make today count, ${state.user?.name ?? "there"}.`,
+  () => `Quizzes await, ${state.user?.name ?? "there"}.`,
 ];
 let greetIdx = 0;
 
@@ -4249,7 +4249,8 @@ function renderPlayerActions(mode, quiz) {
 }
 
 function nextQuestion(quiz) {
-  if (state.player.answers[state.player.index] == null) return;
+  // null player: Finish was already handled (rapid double-click) — nothing to advance
+  if (!state.player || state.player.answers[state.player.index] == null) return;
   // close out the current question's time bucket before moving on
   const p = state.player;
   p.qTimes[p.index] = Math.max(1, Math.round((Date.now() - (p.qStart ?? p.startedAt)) / 1000));
