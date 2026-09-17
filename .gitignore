@@ -1,0 +1,29 @@
+# ─── secrets / signing ───────────────────────────
+android/app/release.keystore
+*.keystore
+*.jks
+
+# ─── live server data (user data, never in git) ──
+server/data/db.json
+server/data/backups/
+server/data/*.backup*.json
+server/*.log
+
+# ─── build artifacts ─────────────────────────────
+*.apk
+*.idsig
+android/app/build/
+android/.gradle/
+
+# ─── toolchains & deps ───────────────────────────
+node_modules/
+android-build-tools/
+
+# ─── personal files, not project code ────────────
+demo data/
+.freebuff/
+
+# ─── OS / editor noise ───────────────────────────
+Thumbs.db
+.DS_Store
+desktop.ini

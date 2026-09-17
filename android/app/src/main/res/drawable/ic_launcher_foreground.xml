@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Quiz Atelier mark: Q monogram, quill × brush over open book, sparkle.
+         Kept in the safe 66x66dp center of the 108dp canvas. -->
+    <!-- open book -->
+    <path
+        android:pathData="M36,58 C42,54 50,54 54,57 C58,54 66,54 72,58 L72,72 C66,68 58,68 54,71 C50,68 42,68 36,72 Z"
+        android:strokeColor="#3f3a30"
+        android:strokeWidth="2.5"
+        android:fillColor="#f7f1de" />
+    <!-- quill (coral) -->
+    <path
+        android:pathData="M40,72 L60,44 C62,41 66,40 67,42 C68,44 65,47 62,48 L44,74 Z"
+        android:strokeColor="#3f3a30"
+        android:strokeWidth="1.5"
+        android:fillColor="#ed6f5c" />
+    <!-- brush (olive) -->
+    <path
+        android:pathData="M68,74 L52,50 C50,47 52,43 54,44 C57,45 58,48 57,50 L70,72 Z"
+        android:strokeColor="#3f3a30"
+        android:strokeWidth="1.5"
+        android:fillColor="#6e7448" />
+    <!-- sparkle (mustard) -->
+    <path
+        android:pathData="M60,32 L62,37 L67,39 L62,41 L60,46 L58,41 L53,39 L58,37 Z"
+        android:fillColor="#e9b94a" />
+    <!-- Q swash under -->
+    <path
+        android:pathData="M38,78 C46,82 62,82 70,78"
+        android:strokeColor="#3f3a30"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+</vector>
