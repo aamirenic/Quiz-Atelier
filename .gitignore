@@ -25,6 +25,11 @@ android-build-tools/
 demo data/
 .freebuff/
 
+# ─── personal demo dataset & one-off tooling ─────
+content.json
+**/content.json
+make_icons.py
+
 # ─── OS / editor noise ───────────────────────────
 Thumbs.db
 .DS_Store
