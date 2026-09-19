@@ -6,17 +6,13 @@
 
 Web · Node API · Android
 
-</div>
-
-<div align="center">
-
-&nbsp;
+[Features](#-features) · [Quick start](#-quick-start) · [Architecture](#-architecture) · [API](#-api-overview) · [Deploy](#-deploying) · [Design](#-the-design-system)
 
 </div>
-
-&nbsp;
 
 > *Quiz Atelier wears its palette on its sleeve: warm parchment surfaces, ink typography, and a coral accent — the look of an artisan's notebook, in light and dark themes alike.*
+
+---
 
 ## ✦ Features
 
@@ -25,6 +21,7 @@ Web · Node API · Android
 - **Scoreboard** — per-quiz results with attendance + pass/fail filters, search, and CSV export
 - **Student snapshots** — per-student stats with instant filters and a six-mode sort cycler
 - **Leaderboard** — ranked averages with best-score tracking
+- **Issue student logins** — students can't self-signup; the teacher creates and publishes their credentials from the **+ New → Student** menu. Unpublished or revoked logins are locked out at the gate, live sessions included.
 
 **🧑‍🎓 For students**
 - **Quiz player** with resume-on-reload (progress survives restarts)
@@ -38,6 +35,52 @@ Web · Node API · Android
 - 📱 Android app (WebView wrapper, offline-first)
 - 🔐 Server-side auth with rate limiting; Gemini keys never touch the client
 - ⚡ Tuned rendering + debounced persistence — stays fast as data grows
+
+## ✦ Quick start
+
+Requires [Node.js 18+](https://nodejs.org). No `npm install` — there are zero dependencies.
+
+```bash
+git clone https://github.com/aamirenic/Quiz-Atelier.git
+cd Quiz-Atelier/server
+node server.js        # serves the webapp + API on http://localhost:8790
+```
+
+**Sign in** — a fresh database seeds two demo accounts automatically:
+
+| Role | Email | Password |
+|---|---|---|
+| Teacher | `teacher@quiz.dev` | `teacher123` |
+| Student | `student@quiz.dev` | `student123` |
+
+> The login form doubles as signup for **teachers** (unknown email → confirm dialog → account created). Students can only sign in with teacher-issued credentials.
+
+**Optional — AI features.** Quiz generation and ELI5 explainers need a [Gemini API key](https://aistudio.google.com/apikey):
+
+```bash
+# server/.env
+GEMINI_API_KEYS=key1,key2     # comma-separated pool; rotates on quota errors
+```
+
+**Build the Android APK** (optional — the web app is fully usable on its own)
+
+<details>
+<summary>Gradle release build</summary>
+
+Requires JDK 17 + Android SDK, and a release keystore at `android/app/release.keystore` (alias `quizatelier`):
+
+```bash
+export JAVA_HOME="<path to JDK 17>"
+export ANDROID_HOME="<path to Android SDK>"
+export QA_STORE_PASSWORD=... QA_KEY_PASSWORD=...
+cd android && ./gradlew assembleRelease
+# → app/build/outputs/apk/release/app-release.apk
+```
+
+The APK bundles the web app from `android/app/src/main/assets/www/` —
+copy `quiz-manager/index.html styles.css app.js sw.js` there before building.
+
+</details>
 
 ## ✦ Architecture
 
@@ -63,46 +106,46 @@ Web · Node API · Android
 | **AI** | Gemini 2.5 Flash via server-side key pool (`/api/ai/generate`) |
 | **Android** | Kotlin WebView + `WebViewAssetLoader`, bundled web app |
 
-## ✦ Getting Started
-
-**Run the server**
-
-```bash
-cd server
-node server.js          # serves the webapp + API on :8790
-```
-
-**Optional — AI features**
-
-```bash
-# server/.env
-GEMINI_API_KEYS=key1,key2,...   # comma-separated pool, rotates on quota errors
-```
-
-**Open the app** — `http://localhost:8790` (demo accounts ship in `content.json`).
-
-**Build the Android APK**
-
-```bash
-export JAVA_HOME="<path to JDK 17>"
-export ANDROID_HOME="<path to Android SDK>"
-export QA_STORE_PASSWORD=... QA_KEY_PASSWORD=...
-cd android && ./gradlew assembleRelease
-# → app/build/outputs/apk/release/app-release.apk
-```
+One codebase serves all three surfaces: the webapp is responsive (rail on desktop, tab bar on phones), and the APK is the same app with a couple of origin-gated extras (export/import/delete-account) — divergence is deliberate and minimal.
 
 ## ✦ Project Layout
 
 ```
 ├── quiz-manager/        # the web app (index.html is generated — see python/)
-│   ├── python/          # build_html.py — generates index.html
+│   ├── python/          # build_html.py — regenerates index.html; don't hand-edit it
 │   ├── app.js           # application logic
-│   └── styles.css       # the design system & palette
+│   ├── styles.css       # the design system & palette
+│   └── sw.js            # service worker (bump CACHE_VERSION on every release)
 ├── server/              # zero-dependency Node API
-│   └── data/            # db.json (gitignored)
-├── android/             # Kotlin WebView wrapper
-└── content.json         # demo seed data
+│   └── data/            # db.json lives here (gitignored — user data)
+└── android/             # Kotlin WebView wrapper
 ```
+
+## ✦ API overview
+
+All routes are JSON over HTTP; auth is a session cookie from `POST /api/login`.
+
+| Area | Routes |
+|---|---|
+| Auth | `POST /api/login` · `POST /api/logout` · `POST /api/signup` (teachers only) |
+| Workspace | `GET/PUT /api/workspace` — per-user quizzes, subjects, attempts, streaks |
+| Students (teacher) | `GET/POST /api/students` · `POST /api/students/publish` · `POST /api/students/delete` |
+| AI | `POST /api/ai/generate` — `{ kind: "quiz" \| "eli5", parts: [...] }`, server-side key pool |
+
+Rate limits: logins are limited per-IP **and** per-account, so scripted retries get 429s quickly.
+
+## ✦ Deploying
+
+Any Node host works. On [Render](https://render.com) (free tier):
+
+| Setting | Value |
+|---|---|
+| Runtime | Node |
+| Build command | `echo "no build needed"` |
+| Start command | `node server/server.js` |
+| Env | `GEMINI_API_KEYS` (optional, enables AI) |
+
+> **Free-tier caveat:** the disk is ephemeral — `db.json` resets on every restart/redeploy, and the service sleeps after ~15 min idle. Fine for demos; for real persistence, attach a paid disk or swap the storage layer for a hosted DB.
 
 ## ✦ The Design System
 
