@@ -255,6 +255,9 @@
                 <button class="account__item" type="button" role="menuitem" id="menu-new-subject">
                   <svg class="ico" aria-hidden="true"><use href="#i-book"></use></svg>Subject
                 </button>
+                <button class="account__item" type="button" role="menuitem" id="menu-new-student">
+                  <svg class="ico" aria-hidden="true"><use href="#i-cap"></use></svg>Student
+                </button>
               </div>
             </div>
             <div class="account">
@@ -268,7 +271,7 @@
                 <p class="account__name" id="account-menu-name">—</p>
                 <p class="account__role" id="account-menu-role">—</p>
               </div>
-              <button class="account__item" type="button" role="menuitem" id="menu-theme">
+              <button class="account__item" type="button" role="menuitem" id="menu-theme" hidden data-apk-only="1">
                 <svg class="ico" aria-hidden="true"><use href="#i-sun"></use></svg><span id="menu-theme-label">Theme: Light</span>
               </button>
               <button class="account__item" type="button" role="menuitem" id="menu-plans">
@@ -276,13 +279,13 @@
               </button>
               <!-- data I/O mirrors the desktop rail's Data block — the rail is
                    hidden at phone widths, so the APK needs these here -->
-              <button class="account__item" type="button" role="menuitem" id="menu-export" data-teacher-only="1">
+              <button class="account__item" type="button" role="menuitem" id="menu-export" data-teacher-only="1" hidden data-apk-only="1">
                 <svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>Export JSON
               </button>
-              <button class="account__item" type="button" role="menuitem" id="menu-import" data-teacher-only="1">
+              <button class="account__item" type="button" role="menuitem" id="menu-import" data-teacher-only="1" hidden data-apk-only="1">
                 <svg class="ico" aria-hidden="true"><use href="#i-upload"></use></svg>Import JSON
               </button>
-              <button class="account__item account__item--danger" type="button" role="menuitem" id="menu-reset" data-teacher-only="1">
+              <button class="account__item account__item--danger" type="button" role="menuitem" id="menu-reset" data-teacher-only="1" hidden data-apk-only="1">
                 <svg class="ico" aria-hidden="true"><use href="#i-trash"></use></svg>Delete Account
               </button>
               <button class="account__item" type="button" role="menuitem" id="menu-signout">
@@ -1098,6 +1101,40 @@
       </div>
     </div>
   </div>
+  <!-- ══════════════════ New Student dialog ══════════════════ -->
+  <div class="modal" id="student-modal" role="dialog" aria-modal="true"
+       aria-labelledby="student-title" hidden>
+    <div class="modal__backdrop" data-close-student></div>
+    <div class="modal__card modal__card--sm" role="document">
+      <h2 class="confirm-title" id="student-title">New Student</h2>
+      <p class="confirm-msg">You issue the login credentials. The student can sign in only after the account is published — untick to prepare it now and activate later.</p>
+      <div class="field">
+        <label for="student-name">Full name</label>
+        <input class="input" id="student-name" type="text" autocomplete="off" maxlength="60"
+               placeholder="e.g. Aarav Sharma" />
+      </div>
+      <div class="field">
+        <label for="student-email">Email <span class="opt">(used to sign in)</span></label>
+        <input class="input" id="student-email" type="email" autocomplete="off" maxlength="80"
+               placeholder="e.g. aarav@school.edu" />
+      </div>
+      <div class="field">
+        <label for="student-pass">Password <span class="opt">(min 6 chars — share it with the student)</span></label>
+        <input class="input" id="student-pass" type="text" autocomplete="off" maxlength="80"
+               placeholder="Set a starting password" />
+      </div>
+      <label class="snap-check" for="student-publish" style="margin-bottom:var(--sp-4)">
+        <input type="checkbox" id="student-publish" checked />
+        <span>Publish immediately — student can sign in right away</span>
+      </label>
+      <p class="field-error" id="student-error" hidden></p>
+      <div class="btnrow btnrow--end">
+        <button class="btn btn--outline" type="button" id="btn-student-cancel">Cancel</button>
+        <button class="btn btn--primary" type="button" id="btn-student-ok">Create Student</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ══════════════════ Notice dialog ══════════════════ -->
   <div class="modal" id="notice-modal" role="dialog" aria-modal="true"
        aria-labelledby="notice-title" hidden>

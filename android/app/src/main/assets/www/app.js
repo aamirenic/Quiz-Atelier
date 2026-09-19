@@ -75,9 +75,45 @@ let ROSTER = [];
 /* Real auth: sessions live on the server (HttpOnly cookie, 30 days),
    and the cloud workspace DB (server/data/db.json) syncs per user. */
 const DEMO_ACCOUNTS = [
-  { email: "teacher@quiz.dev", password: "teacher123", role: "teacher", name: "Prof. Meera" },
-  { email: "student@quiz.dev", password: "student123", role: "student", name: "Demo Student" },
+  { email: "teacher@quiz.dev", password: "teacher123", role: "teacher", name: "Dr. Meera Kapoor" },
+  { email: "student@quiz.dev", password: "student123", role: "student", name: "Aarav" },
 ];
+
+/* Offline demo fallback — content.json is the demo seed dataset (Aarav's
+   quizzes, attempts, class leaderboards and the full subject list). Load it
+   as the signed-in account's workspace so offline mode has data to show. */
+async function loadDemoContent() {
+  try {
+    const res = await fetch("content.json", { cache: "no-store" });
+    if (!res.ok) return false;
+    const c = await res.json();
+    // the dataset spans 8 classes; the demo account is Aarav of Grade 6 · A —
+    // keep only his class's quizzes and attempts so rankings look right
+    const cls = c.students?.find((s) => s.name === "Aarav")?.classId || "g6a";
+    // subjects ride in as custom subjects — the app has no built-ins by design
+    const customSubjects = (Array.isArray(c.subjects) ? c.subjects : [])
+      .map((s) => ({ ...s, custom: true }));
+    for (const s of customSubjects) if (s?.id && !SUBJECTS.some((x) => x.id === s.id)) SUBJECTS.push(s);
+    state.quizzes = (Array.isArray(c.quizzes) ? c.quizzes : []).filter((q) => !q.classId || q.classId === cls);
+    state.attempts = (Array.isArray(c.attempts) ? c.attempts : [])
+      .filter((a) => !a.classId || a.classId === cls).slice().sort((a, b) => b.ts - a.ts);
+    state.activity = Array.isArray(c.activity) ? c.activity : [];
+    state.lastQuizId = state.attempts[0]?.quizId || state.quizzes[0]?.id || null;
+    state.roster = (Array.isArray(c.students) ? c.students : [])
+      .filter((s) => s.classId === cls).map((s) => s.name);
+    // streak from Aarav's own attempt days, so badges/heatmap reflect the data
+    const dayKeyOf = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+    const myDays = [...new Set(state.attempts
+      .filter((a) => a.student === "Aarav").map((a) => dayKeyOf(a.ts)))].sort();
+    state.streak = { days: myDays, lastDay: myDays[myDays.length - 1] || null };
+    state.comebacks = [];
+    syncRoster();
+    refreshSubjectPickers();
+    renderAll();
+    save();
+    return true;
+  } catch { return false; }
+}
 
 /* Cookie consent — accepted means "you may keep my login session".
    Rejected means no session cookie; the user signs in every visit.
@@ -91,14 +127,14 @@ function consentState() {
 /* Dashboard greetings — one is picked at sign-in, then the pool rotates
    on every return to the dashboard. */
 const GREETINGS = [
-  () => `${timeHello()}, ${state.user.name}`,
-  () => `How's the weather today, ${state.user.name}?`,
-  () => `Welcome back, ${state.user.name}!`,
-  () => `Back to it, ${state.user.name}.`,
-  () => `${state.user.role === "student" ? "Ready to learn" : "Ready to teach"}, ${state.user.name}?`,
-  () => `Great to see you, ${state.user.name}.`,
-  () => `Let's make today count, ${state.user.name}.`,
-  () => `Quizzes await, ${state.user.name}.`,
+  () => `${timeHello()}, ${state.user?.name ?? "there"}`,
+  () => `How's the weather today, ${state.user?.name ?? "there"}?`,
+  () => `Welcome back, ${state.user?.name ?? "there"}!`,
+  () => `Back to it, ${state.user?.name ?? "there"}.`,
+  () => `${state.user?.role === "student" ? "Ready to learn" : "Ready to teach"}, ${state.user?.name ?? "there"}?`,
+  () => `Great to see you, ${state.user?.name ?? "there"}.`,
+  () => `Let's make today count, ${state.user?.name ?? "there"}.`,
+  () => `Quizzes await, ${state.user?.name ?? "there"}.`,
 ];
 let greetIdx = 0;
 
@@ -348,9 +384,24 @@ function applyWorkspaceData(data) {
     if (sub && n.notice?.name) sub.notice = n.notice;
   }
   migrateWorkspace();
+  // subjects may have just arrived with the workspace — the builder/generator
+  // <select>s were populated at boot when SUBJECTS was still empty
+  refreshSubjectPickers();
 }
 
 function loadWorkspace(workspace) {
+  // demo accounts (student@quiz.dev / teacher@quiz.dev) always run the
+  // content.json showcase: a workspace without the showcase's demo- quiz ids
+  // is stale junk (old playtest data) or empty — replace it with the seed
+  const isDemoAcct = DEMO_ACCOUNTS.some((a) => a.email === (state.user?.username || state.user?.email));
+  if (isDemoAcct) {
+    const wsHasShowcase = workspace && Array.isArray(workspace.quizzes)
+      && workspace.quizzes.some((q) => String(q.id || "").startsWith("demo-"));
+    if (wsHasShowcase) { applyWorkspaceData(workspace); return; }
+    try { localStorage.removeItem(localStoreKey()); } catch { /* private mode */ }
+    loadDemoContent();
+    return;
+  }
   if (workspace && Array.isArray(workspace.quizzes) && workspace.quizzes.length) {
     applyWorkspaceData(workspace);
     return;
@@ -565,7 +616,8 @@ async function handleLogin(e) {
     $("#login-user").focus();
     return;
   }
-  const isNew = !DEMO_ACCOUNTS.some((a) => a.email === email);
+  const knownDemo = DEMO_ACCOUNTS.some((a) => a.email === email);
+  const isNew = !knownDemo && loginRole === "teacher"; // students never self-signup
   passErr.hidden = !(isNew && pass.length < 6);
   if (passErr.hidden === false) { $("#login-pass").focus(); return; }
 
@@ -578,6 +630,7 @@ async function handleLogin(e) {
         state.cloud = false;
         err.hidden = true;
         signIn(acct);
+        loadDemoContent();
         toast("Server unreachable — running in offline demo mode");
       } else {
         err.textContent = "Server unreachable — demo accounts: teacher@quiz.dev / teacher123 or student@quiz.dev / student123.";
@@ -591,6 +644,13 @@ async function handleLogin(e) {
     }
     btn.disabled = false;
   };
+  if (!knownDemo && loginRole === "student") {
+    // Student accounts are teacher-issued only — no self-signup path.
+    err.textContent = "No student account with that email. Your teacher creates student logins — ask them to issue your credentials.";
+    err.hidden = false;
+    $("#login-user").focus();
+    return;
+  }
   if (isNew) {
     // A login typo must never silently become a new account: confirm,
     // and never create one without a name.
@@ -1025,7 +1085,10 @@ function applyRoleChrome() {
   $("#rail-teacher-only").hidden = student;
   $("#rail-student-only").hidden = !student;
   // account-menu Data items are teacher-only (they mirror the rail's Data block)
-  for (const item of $$("#account-menu [data-teacher-only]")) item.hidden = student;
+  // — but APK-only items stay hidden on the webapp regardless of role: the APK
+  // needs them because its rail is hidden, the webapp's rail provides them.
+  const onApk = location.hostname.includes("appassets");
+  for (const item of $$("#account-menu [data-teacher-only]")) item.hidden = student || !onApk;
   // AI panel doubles as the student's practice generator
   $("#gen-form-title").textContent = student ? "Practice From Your Notes" : "From Your Notes";
   $("#gen-file-note").textContent = student
@@ -1182,6 +1245,48 @@ function addSubjectFromModal() {
   renderAll();
   toast(`Subject “${name}” added`);
   logActivity("edit", `Added subject “${name}”`);
+}
+
+/* ─── student credentials: teacher issues & publishes accounts ──── */
+function promptNewStudent() {
+  $("#student-name").value = "";
+  $("#student-email").value = "";
+  $("#student-pass").value = "";
+  $("#student-publish").checked = true;
+  $("#student-error").hidden = true;
+  openModal("#student-modal");
+  $("#student-name").focus();
+}
+
+async function createStudentFromModal() {
+  const name = $("#student-name").value.trim();
+  const email = $("#student-email").value.trim().toLowerCase();
+  const pass = $("#student-pass").value;
+  const publish = $("#student-publish").checked;
+  const err = $("#student-error");
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!name) { err.textContent = "Give the student a name first."; err.hidden = false; $("#student-name").focus(); return; }
+  if (!EMAIL_RE.test(email)) { err.textContent = "Enter a valid email address."; err.hidden = false; $("#student-email").focus(); return; }
+  if (pass.length < 6) { err.textContent = "Password must be at least 6 characters."; err.hidden = false; $("#student-pass").focus(); return; }
+  const btn = $("#btn-student-ok");
+  btn.disabled = true;
+  try {
+    const data = await api("/api/students", {
+      method: "POST",
+      body: JSON.stringify({ name, email, password: pass, publish }),
+    });
+    closeModal("#student-modal");
+    const s = data.student;
+    toast(publish
+      ? `Student “${s.name}” created — credentials active`
+      : `Student “${s.name}” saved as draft — publish when ready`);
+    logActivity("edit", `Issued student credentials for “${s.name}”`);
+  } catch (ex) {
+    err.textContent = ex.message || "Could not create the student account.";
+    err.hidden = false;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ─── router ─────────────────────────────────────────────────────── */
@@ -4193,7 +4298,8 @@ function renderPlayerActions(mode, quiz) {
 }
 
 function nextQuestion(quiz) {
-  if (state.player.answers[state.player.index] == null) return;
+  // null player: Finish was already handled (rapid double-click) — nothing to advance
+  if (!state.player || state.player.answers[state.player.index] == null) return;
   // close out the current question's time bucket before moving on
   const p = state.player;
   p.qTimes[p.index] = Math.max(1, Math.round((Date.now() - (p.qStart ?? p.startedAt)) / 1000));
@@ -4944,6 +5050,14 @@ document.addEventListener("click", (e) => {
       $("#btn-new-menu").setAttribute("aria-expanded", "false");
       promptNewSubject();
     }],
+    ["#menu-new-student", () => {
+      $("#new-menu").hidden = true;
+      $("#btn-new-menu").setAttribute("aria-expanded", "false");
+      promptNewStudent();
+    }],
+    ["#btn-student-ok", createStudentFromModal],
+    ["#btn-student-cancel", () => closeModal("#student-modal")],
+    ["[data-close-student]", () => closeModal("#student-modal")],
     ["#btn-play-current", () => {
       const quiz = currentBuilderQuiz();
       if (quiz?.questions.length) openPlayer(quiz.id);
@@ -5083,10 +5197,32 @@ if ("serviceWorker" in navigator &&
     (location.protocol === "http:" || location.protocol === "https:") &&
     !location.hostname.includes("appassets")) {
   addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => { /* offline-first still works */ });
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      // self-heal stale tabs: cache-first serving means a tab opened before a
+      // release keeps running old code forever. When a NEW service worker
+      // activates (and this tab already had one), reload once to pick it up.
+      reg.addEventListener("updatefound", () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "activated" && navigator.serviceWorker.controller) {
+            location.reload();
+          }
+        });
+      });
+      // probe for a newer build on every load (catches tabs left open overnight)
+      reg.update().catch(() => { /* offline */ });
+    }).catch(() => { /* offline-first still works */ });
   });
 }
 initTheme();
+/* APK-only menu items: Export/Import/Delete Account live in the account menu
+   because the APK hides the desktop rail (its only Data block). On the webapp
+   the rail provides them, so these stay hidden there. data-apk-only="1"
+   marks them; reveal when running inside the WebView asset-loader origin. */
+if (location.hostname.includes("appassets")) {
+  document.querySelectorAll("[data-apk-only]").forEach((el) => { el.hidden = false; });
+}
 buildChoiceRow();
 resetQuestionForm();
 wireLogin();

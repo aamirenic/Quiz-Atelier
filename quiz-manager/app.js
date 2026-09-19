@@ -75,9 +75,45 @@ let ROSTER = [];
 /* Real auth: sessions live on the server (HttpOnly cookie, 30 days),
    and the cloud workspace DB (server/data/db.json) syncs per user. */
 const DEMO_ACCOUNTS = [
-  { email: "teacher@quiz.dev", password: "teacher123", role: "teacher", name: "Prof. Meera" },
-  { email: "student@quiz.dev", password: "student123", role: "student", name: "Demo Student" },
+  { email: "teacher@quiz.dev", password: "teacher123", role: "teacher", name: "Dr. Meera Kapoor" },
+  { email: "student@quiz.dev", password: "student123", role: "student", name: "Aarav" },
 ];
+
+/* Offline demo fallback — content.json is the demo seed dataset (Aarav's
+   quizzes, attempts, class leaderboards and the full subject list). Load it
+   as the signed-in account's workspace so offline mode has data to show. */
+async function loadDemoContent() {
+  try {
+    const res = await fetch("content.json", { cache: "no-store" });
+    if (!res.ok) return false;
+    const c = await res.json();
+    // the dataset spans 8 classes; the demo account is Aarav of Grade 6 · A —
+    // keep only his class's quizzes and attempts so rankings look right
+    const cls = c.students?.find((s) => s.name === "Aarav")?.classId || "g6a";
+    // subjects ride in as custom subjects — the app has no built-ins by design
+    const customSubjects = (Array.isArray(c.subjects) ? c.subjects : [])
+      .map((s) => ({ ...s, custom: true }));
+    for (const s of customSubjects) if (s?.id && !SUBJECTS.some((x) => x.id === s.id)) SUBJECTS.push(s);
+    state.quizzes = (Array.isArray(c.quizzes) ? c.quizzes : []).filter((q) => !q.classId || q.classId === cls);
+    state.attempts = (Array.isArray(c.attempts) ? c.attempts : [])
+      .filter((a) => !a.classId || a.classId === cls).slice().sort((a, b) => b.ts - a.ts);
+    state.activity = Array.isArray(c.activity) ? c.activity : [];
+    state.lastQuizId = state.attempts[0]?.quizId || state.quizzes[0]?.id || null;
+    state.roster = (Array.isArray(c.students) ? c.students : [])
+      .filter((s) => s.classId === cls).map((s) => s.name);
+    // streak from Aarav's own attempt days, so badges/heatmap reflect the data
+    const dayKeyOf = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+    const myDays = [...new Set(state.attempts
+      .filter((a) => a.student === "Aarav").map((a) => dayKeyOf(a.ts)))].sort();
+    state.streak = { days: myDays, lastDay: myDays[myDays.length - 1] || null };
+    state.comebacks = [];
+    syncRoster();
+    refreshSubjectPickers();
+    renderAll();
+    save();
+    return true;
+  } catch { return false; }
+}
 
 /* Cookie consent — accepted means "you may keep my login session".
    Rejected means no session cookie; the user signs in every visit.
@@ -354,6 +390,18 @@ function applyWorkspaceData(data) {
 }
 
 function loadWorkspace(workspace) {
+  // demo accounts (student@quiz.dev / teacher@quiz.dev) always run the
+  // content.json showcase: a workspace without the showcase's demo- quiz ids
+  // is stale junk (old playtest data) or empty — replace it with the seed
+  const isDemoAcct = DEMO_ACCOUNTS.some((a) => a.email === (state.user?.username || state.user?.email));
+  if (isDemoAcct) {
+    const wsHasShowcase = workspace && Array.isArray(workspace.quizzes)
+      && workspace.quizzes.some((q) => String(q.id || "").startsWith("demo-"));
+    if (wsHasShowcase) { applyWorkspaceData(workspace); return; }
+    try { localStorage.removeItem(localStoreKey()); } catch { /* private mode */ }
+    loadDemoContent();
+    return;
+  }
   if (workspace && Array.isArray(workspace.quizzes) && workspace.quizzes.length) {
     applyWorkspaceData(workspace);
     return;
@@ -582,6 +630,7 @@ async function handleLogin(e) {
         state.cloud = false;
         err.hidden = true;
         signIn(acct);
+        loadDemoContent();
         toast("Server unreachable — running in offline demo mode");
       } else {
         err.textContent = "Server unreachable — demo accounts: teacher@quiz.dev / teacher123 or student@quiz.dev / student123.";
@@ -5148,7 +5197,22 @@ if ("serviceWorker" in navigator &&
     (location.protocol === "http:" || location.protocol === "https:") &&
     !location.hostname.includes("appassets")) {
   addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => { /* offline-first still works */ });
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      // self-heal stale tabs: cache-first serving means a tab opened before a
+      // release keeps running old code forever. When a NEW service worker
+      // activates (and this tab already had one), reload once to pick it up.
+      reg.addEventListener("updatefound", () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "activated" && navigator.serviceWorker.controller) {
+            location.reload();
+          }
+        });
+      });
+      // probe for a newer build on every load (catches tabs left open overnight)
+      reg.update().catch(() => { /* offline */ });
+    }).catch(() => { /* offline-first still works */ });
   });
 }
 initTheme();

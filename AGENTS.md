@@ -58,17 +58,19 @@ Never tell the user a change is "done" without the rebuilt APK in place.
 
 ## Project facts (so future sessions don't re-derive them)
 
-- Current release: **v1.6.2** (`CACHE_VERSION "qa-v1.6.2"` in sw.js,
-  versionCode 34). Recent history: v1.6.1 render/save perf fix (renderAll
-  renders only the active view; save() debounced 350ms with flush on
-  beforeunload/visibilitychange — do NOT reintroduce eager save() calls),
-  v1.6.0 streak/badge redesign, v1.5.8 scoreboard playtest fixes.
-- Repo is on GitHub (see `git remote -v` for the origin URL), branch
-  `master`. `.gitignore` excludes
+- Current release: **webapp qa-v1.7.3** (commit e1e90cb era), APK v1.6.9
+  (versionCode 41) — webapp is AHEAD of the APK; APK ships only on user
+  approval per the standing rule above.
+- Repo is on GitHub (aamirenic/Quiz-Atelier), branch `master`. HISTORY WAS
+  REWRITTEN to a single commit (`Initial commit: Quiz Atelier`, Sep 2026) at
+  the user's request — all pre-rewrite history is gone; `/tmp/git-backup-*`
+  has an old chain until reboot. `.gitignore` excludes
   db.json, keystore, APKs, node_modules, android-build-tools, demo data,
-  .freebuff. Deployment target is Vercel; the long-running `server.js`
-  needs a serverless/KV refactor (or a Render-side host) before the live
-  site can persist data.
+  .freebuff. Deployment is LIVE on Render (Web Service, region Singapore,
+  build `echo "no build needed"`, start `node server/server.js`) —
+  auto-deploys on push; free tier: sleeps after ~15min idle, ephemeral disk
+  (db.json resets on every redeploy). `server/server.js` must bind `0.0.0.0`
+  (HOST fallback) or Render port-scan fails.
 - Webapp: `quiz-manager/` — index.html is generated shell markup,
   app.js + styles.css are hand-maintained; zero-build.
 - Server: `server/server.js`, zero-dependency Node 18+ (http, fs, crypto, tls).
@@ -83,10 +85,10 @@ Never tell the user a change is "done" without the rebuilt APK in place.
   guarded to NOT run inside the APK WebView origin (appassets.androidplatform.net).
 - Roadmap + decision log: a personal file outside the repo (not committed;
   ask the user for its location if needed).
-- Docs: `Quiz-Atelier-Project-Documentation.docx` (19-section report,
-  built by `make_docx.py`; screenshot sources in `docx-assets/`). The docx
-  documents v1.6.2 feature set. When a change is feature-worthy, add it to
-  the docx ADDITIVELY only — the user considers existing content final.
+- Docs: the docx documentation lives OUTSIDE the repo (moved to
+  `IDS-local-docs/` with the make_docx.py and docx-assets backup); the docx
+  is not in git. When a change is feature-worthy, add to it ADDITIVELY only
+  — the user considers existing content final.
 - Plans: teacher lenient/caring/strict; student backbencher/average/nerd.
   Student plan ids gate: ELI5 (3/day free), daily warm-up (paid), comeback
   rounds + graveyard (free).
@@ -123,6 +125,31 @@ Never tell the user a change is "done" without the rebuilt APK in place.
 - Auth/fetch probes: hook `window.addEventListener("unhandledrejection", ...)`
   and `console` logs via `preview_logs` before concluding a handler is dead —
   several "stuck" states were probe races, not app bugs.
+- `register_preview` needs the server PID (`url` + `pid`), not just the URL;
+  find it with `netstat -ano | grep :8790`. If `puppeteer.connect().pages()`
+  hangs, the DevTools target list is jammed with zombie probe tabs (30+
+  accumulate per session) — don't debug the hang; spawn a throwaway Edge
+  instead: `msedge.exe --headless=new --remote-debugging-port=93xx` then
+  connect (puppeteer's own `launch()` fails on this machine; manual spawn
+  works). Kill throwaways with `edge.kill()`.
+- SW-cache staleness applies to the PREVIEW TAB too: after shipping, a page
+  that's already open runs old code until `preview_navigate(reload)`. Probe
+  results that contradict the just-shipped fix usually mean the probe ran
+  the previous release.
+- Login rate limit is 6/10min PER ACCOUNT — probing student+teacher logins
+  in one session can lock both; prefer direct session-cookie reuse or the
+  in-page `signIn()` API over repeated `/api/login`.
+- Workspace data model: attempts live in whichever workspace wrote them
+  (per-user JSON blobs PUT to `/api/workspace`). Student attempts are NOT
+  visible to the teacher unless written into the teacher's workspace —
+  Teacher Results showing "Attempts 0" after a student plays is the known
+  symptom, not a render bug. Most workspace attempts can be orphaned
+  (quizId not in workspace quizzes) from old imports.
+- `GET /api/students`, `POST /api/students`, `/api/students/publish`,
+  `/api/students/delete`: teacher-session-only routes for issued student
+  credentials. Student accounts with `createdBy` require `published:true`
+  to log in; accounts WITHOUT `createdBy` (demo/legacy) bypass the check —
+  `student@quiz.dev` still self-logins by design exception.
 
 ## User-stated preferences & decisions
 
@@ -141,6 +168,11 @@ Never tell the user a change is "done" without the rebuilt APK in place.
 - Login form doubles as signup BY DESIGN (unknown email creates an account),
   but a confirm dialog is required first and nameless accounts must never be
   created.
+- STUDENT self-signup is now BLOCKED (gate + `/api/signup`): students sign in
+  only with teacher-issued, published credentials (New menu → Student).
+  The confirm-signup flow above now applies to teachers only.
+- No student-management UI exists yet for issued credentials — publish/
+  delete drafts only via the API routes; don't assume a screen for it.
 - Quiz runs must survive reload/restart: progress saves per-user locally and
   resumes on next sign-in (`resumeRunProgress()`); don't regress this.
 - Student header at phone width is compacted to one line (Open Latest,
@@ -148,4 +180,12 @@ Never tell the user a change is "done" without the rebuilt APK in place.
 - Never print or commit the GitHub token / stored credentials; use
   `git credential fill` transiently and delete temp files immediately.
 - The SVG rail mark (`.rail__mark--logo`) must keep the Q glyph inside the
-  ring circle — v1.6.7's Q tail crossed the ring stroke and had to be shrunk.
+  ring circle — v1.6.7's Q tail crossed the ring stroke and had to be shrunk.- Commit messages: NEVER append any "Generated with Codebuff" / "Co-Authored-By:" trailer for ANYONE (AI, bots, other users) — in this project AND every other project. GitHub counts co-author trailers as contributions. Commits must appear made solely by the repo owner: author/committer = the user's configured identity only, message body only, no trailers/signatures/AI attribution.
+- Webapp vs APK diverge INTENTIONALLY: webapp topbar is two rows (theme+bell
+  row, then New+account row); APK keeps the v1.5.9 single row. Account menu:
+  Export/Import/Delete Account are APK-only (`data-apk-only="1"`, revealed
+  via the appassets origin check); the webapp menu shows Plans+Sign Out only.
+  Don't "fix" one to match the other.
+- APK release cadence: ship webapp first, then ask via ask_questions whether
+  to build the APK — even when the bundled files already contain the change,
+  unless the user pre-approved that change for the APK.
