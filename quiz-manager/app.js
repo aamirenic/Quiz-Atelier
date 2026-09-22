@@ -399,8 +399,10 @@ function loadWorkspace(workspace) {
       && workspace.quizzes.some((q) => String(q.id || "").startsWith("demo-"));
     if (wsHasShowcase) { applyWorkspaceData(workspace); return; }
     try { localStorage.removeItem(localStoreKey()); } catch { /* private mode */ }
-    loadDemoContent();
-    return;
+    // content.json only exists in the bundled offline build — on the live
+    // server it was removed (demo data, not for real users), so only the
+    // offline fallback should ever fetch it. Cloud demo accounts start empty.
+    if (!state.cloud) { loadDemoContent(); return; }
   }
   if (workspace && Array.isArray(workspace.quizzes) && workspace.quizzes.length) {
     applyWorkspaceData(workspace);
@@ -546,6 +548,9 @@ function showLogin() {
   $("#login-user").value = "";
   $("#login-name").value = "";
   $("#login-pass").value = "";
+  // re-arm the submit button: the previous sign-in disabled it and the
+  // success path never re-enables it, which locked out the next login
+  $("#btn-login").disabled = false;
 }
 
 function chooseLoginRole(role) {
@@ -2593,6 +2598,20 @@ function renderDraftsScreen() {
         el("span", { class: "draft-row__sub", text: quiz.scheduledFor
           ? `Scheduled — ${fmtDay(quiz.scheduledFor)}`
           : `${sub.name} · ${quiz.questions.length} question${quiz.questions.length === 1 ? "" : "s"}` })),
+      el("button", {
+        class: "btn btn--ghost btn--sm", type: "button", text: "Delete",
+        "aria-label": `Delete draft ${quiz.title}`,
+        onclick: () => askConfirm(`Delete draft “${quiz.title}”?`,
+          "This draft and its questions will be removed. This cannot be undone.",
+          "Delete Draft", () => {
+            state.quizzes = state.quizzes.filter((q) => q.id !== quiz.id);
+            logActivity("edit", `Deleted draft “${quiz.title}”`);
+            if (state.lastQuizId === quiz.id) state.lastQuizId = state.quizzes[0]?.id ?? null;
+            if (state.builderQuizId === quiz.id) resetBuilder();
+            save(); renderAll();
+            toast("Draft deleted");
+          }),
+      }),
       el("button", {
         class: "btn btn--outline btn--sm", type: "button",
         "aria-label": `Continue editing ${quiz.title}`,
