@@ -179,7 +179,7 @@ let geminiKeyIdx = 0;
 async function callGeminiServer(parts, schema, generation = {}) {
   if (!GEMINI_KEYS.length) throw Object.assign(new Error("AI service not configured"), { status: 503 });
   const attempt = async (key) => {
-    const res = await fetch(`${GEMINI_BASE}/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+    const res = await fetch(`${GEMINI_BASE}/gemini-3.6-flash:generateContent?key=${encodeURIComponent(key)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
