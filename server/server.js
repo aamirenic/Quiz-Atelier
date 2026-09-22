@@ -175,6 +175,18 @@ const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 let geminiKeyIdx = 0;
+/* Rate-limited keys cool down for a few minutes instead of being retried
+   first on the next call — a hot classroom keeps rotating to fresh keys. */
+const GEMINI_COOLDOWN_MS = 3 * 60 * 1000;
+const geminiCooldownUntil = new Map(); // key -> epoch ms when it may be tried again
+const geminiNextUsableKey = () => {
+  const now = Date.now();
+  for (let i = 0; i < GEMINI_KEYS.length; i++) {
+    const idx = (geminiKeyIdx + i) % GEMINI_KEYS.length;
+    if ((geminiCooldownUntil.get(GEMINI_KEYS[idx]) || 0) <= now) return idx;
+  }
+  return -1; // every key is cooling down
+};
 
 async function callGeminiServer(parts, schema, generation = {}) {
   if (!GEMINI_KEYS.length) throw Object.assign(new Error("AI service not configured"), { status: 503 });
@@ -206,19 +218,24 @@ async function callGeminiServer(parts, schema, generation = {}) {
   };
   // rotate through the pool on quota/capacity errors, like the old client code
   for (let tries = 0; tries < GEMINI_KEYS.length + 1; tries++) {
+    const startIdx = geminiNextUsableKey();
+    if (startIdx === -1) break; // whole pool cooling down — fail fast, don't hammer
+    geminiKeyIdx = startIdx;
     const key = GEMINI_KEYS[geminiKeyIdx];
     try {
       const out = await attempt(key);
       return out;
     } catch (err) {
       if (err.status === 429 || err.status === 503) {
-        geminiKeyIdx = (geminiKeyIdx + 1) % GEMINI_KEYS.length;
-        if (tries < GEMINI_KEYS.length - 1) continue;
+        // park this key for a few minutes and move to the next fresh one
+        geminiCooldownUntil.set(key, Date.now() + GEMINI_COOLDOWN_MS);
+        console.log(`[gemini] key #${geminiKeyIdx} rate-limited — cooling down ${(GEMINI_COOLDOWN_MS / 60000) | 0} min, rotating`);
+        continue;
       }
       throw err;
     }
   }
-  throw Object.assign(new Error("All AI keys are rate-limited — try later"), { status: 429 });
+  throw Object.assign(new Error("All AI keys are rate-limited — try again in a few minutes"), { status: 429 });
 }
 
 const GEN_SCHEMA = {
