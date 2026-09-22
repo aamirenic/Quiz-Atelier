@@ -34,3 +34,8 @@ make_icons.py
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# ─── env files (secrets) ─────────────────────────
+server/.env
+.env
+*.env
