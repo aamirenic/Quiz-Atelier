@@ -674,13 +674,10 @@ async function handleLogin(e) {
     }
     btn.disabled = false;
   };
-  if (!knownDemo && loginRole === "student") {
-    // Student accounts are teacher-issued only — no self-signup path.
-    err.textContent = "No student account with that email. Your teacher creates student logins — ask them to issue your credentials.";
-    err.hidden = false;
-    $("#login-user").focus();
-    return;
-  }
+  // Students (demo or teacher-issued) and existing teachers go straight to
+  // /api/login — the server owns the roster (unknown → 401, unpublished
+  // student → 403, wrong password → 401). Students never self-signup: that
+  // is enforced server-side in /api/signup.
   if (isNew) {
     // A login typo must never silently become a new account: confirm,
     // and never create one without a name.
