@@ -145,8 +145,6 @@ Any Node host works. On [Render](https://render.com) (free tier):
 | Start command | `node server/server.js` |
 | Env | `GEMINI_API_KEYS` (optional, enables AI) |
 
-> **Free-tier caveat:** the disk is ephemeral — `db.json` resets on every restart/redeploy, and the service sleeps after ~15 min idle. Fine for demos; for real persistence, attach a paid disk or swap the storage layer for a hosted DB.
-
 ## ✦ The Design System
 
 All colors live as raw hex in one place — `quiz-manager/styles.css :root` —
