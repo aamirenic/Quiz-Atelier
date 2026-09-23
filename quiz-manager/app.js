@@ -763,6 +763,11 @@ async function signOut() {
   clearTimeout(syncTimer); // drop any pending sync — the session is gone
   state.user = null;
   state.quizzes = []; state.attempts = []; state.activity = []; state.lastQuizId = null;
+  // the generator is account-scoped: a teacher's in-review draft (or the
+  // attached PDF) must never survive into the next account's panel
+  state.gen = { source: "pdf", file: null, url: "", draft: null };
+  $("#gen-file-input").value = "";
+  genResetPanel();
   state.view = "dashboard";
   showLogin();
   toast("Signed out");
