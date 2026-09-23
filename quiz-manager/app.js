@@ -4566,6 +4566,7 @@ function genShowError(msg) { const n = $("#gen-error"); n.textContent = msg; n.h
 function genHideError() { const n = $("#gen-error"); n.textContent = ""; n.hidden = true; }
 
 function genLoading(on, title, note) {
+  clearInterval(genRetryTimer); genRetryTimer = null; // cancel any stale countdown
   $("#gen-idle").hidden = on || !!state.gen?.draft;
   $("#gen-loading").hidden = !on;
   $("#gen-fail").hidden = true;
@@ -4577,13 +4578,88 @@ function genLoading(on, title, note) {
   $("#btn-generate").disabled = on;
 }
 
-function genFail(msg) {
+let genRetryTimer = null;
+function genFail(msg, retryAfter) {
   genLoading(false);
   state.gen.draft = null;
   $("#gen-review").hidden = true;
   $("#gen-idle").hidden = true;
   $("#gen-fail").hidden = false;
   $("#gen-fail-note").textContent = msg;
+  // Whole key pool cooling → live countdown on the retry button instead of
+  // a vague "few minutes"; the button unlocks the moment the pool frees up.
+  const btn = $("#btn-gen-retry");
+  clearInterval(genRetryTimer);
+  genRetryTimer = null;
+  btn.disabled = false;
+  btn.textContent = "Try Again";
+  const secs = Math.max(0, Math.min(3600, Number(retryAfter) || 0));
+  if (secs > 5) {
+    const endAt = Date.now() + secs * 1000;
+    const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    const tick = () => {
+      const left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+      if (left <= 0) {
+        clearInterval(genRetryTimer); genRetryTimer = null;
+        btn.disabled = false;
+        btn.textContent = "Try Again";
+      } else {
+        btn.disabled = true;
+        btn.textContent = `Try Again in ${fmt(left)}`;
+      }
+    };
+    tick();
+    genRetryTimer = setInterval(tick, 1000);
+  }
+}
+
+/* Extract text from a PDF in the browser so the AI request carries a few KB
+   of text instead of ~11 MB of base64 — one big PDF could otherwise eat the
+   per-minute Gemini quota in a single request. pdf.js loads lazily from CDN;
+   any failure (offline, scanned PDF, CSP) returns "" and runGeneration()
+   falls back to the original inline-PDF path. */
+let pdfjsPromise = null;
+function loadPdfJs() {
+  if (pdfjsPromise) return pdfjsPromise;
+  pdfjsPromise = (async () => {
+    const URLs = [
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs",
+      "https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs",
+    ];
+    const loader = async (base) => {
+      const mod = await import(/* @vite-ignore */ `${base.replace("pdf.worker.min.mjs", "pdf.min.mjs")}`);
+      mod.GlobalWorkerOptions.workerSrc = base;
+      return mod;
+    };
+    let lastErr;
+    for (const u of URLs) {
+      try { return await loader(u); } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
+  })();
+  pdfjsPromise = pdfjsPromise.catch(() => { pdfjsPromise = null; return null; });
+  return pdfjsPromise;
+}
+
+async function pdfExtractText(file) {
+  try {
+    if (file.size > 30 * 1024 * 1024) return ""; // huge → inline path handles it
+    const pdfjs = await loadPdfJs();
+    if (!pdfjs) return "";
+    const buf = await file.arrayBuffer();
+    const doc = await pdfjs.getDocument({ data: buf }).promise;
+    const pages = Math.min(doc.numPages, 80);
+    const out = [];
+    for (let p = 1; p <= pages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      out.push(content.items.map((it) => it.str).join(" "));
+      if (out.join("").length > 300000) break; // plenty for quiz generation
+    }
+    return out.join("\n\n").trim();
+  } catch {
+    return ""; // caller falls back to inline PDF
+  }
 }
 
 async function fileToBase64(file) {
@@ -4659,10 +4735,15 @@ async function callGemini(parts, schema = GEN_SCHEMA, kind = "quiz") {
     signal: genAbort?.signal,
   });
   if (!res.ok) {
-    let detail = "";
-    try { detail = (await res.json())?.error || ""; } catch { /* keep empty */ }
+    let detail = "", retryAfter = 0;
+    try {
+      const body = await res.json();
+      detail = body?.error || "";
+      retryAfter = Number(body?.retryAfter) || 0;
+    } catch { /* keep empty */ }
     const err = new Error(detail || `AI request failed (${res.status}).`);
     err.status = res.status;
+    if (retryAfter) err.retryAfter = retryAfter;
     throw err;
   }
   return res.json();
@@ -4714,12 +4795,24 @@ async function runGeneration() {
     let parts;
     if (src === "pdf") {
       const file = state.gen.file;
-      const b64 = await fileToBase64(file);
-      genLoading(true, "Understanding the material…", "Larger PDFs can take up to a minute.");
-      parts = [
-        { text: genPrompt(Number($("#gen-count").value), subjectById(subjectId)) },
-        { inline_data: { mime_type: "application/pdf", data: b64 } },
-      ];
+      genLoading(true, "Reading your notes…", "Extracting text from the PDF…");
+      // Prefer client-side text extraction: the request shrinks ~100×, so a
+      // large PDF no longer eats the per-minute AI quota in one bite.
+      const text = await pdfExtractText(file);
+      if (text && text.replace(/\s+/g, "").length > 400) {
+        parts = [
+          { text: genPrompt(Number($("#gen-count").value), subjectById(subjectId)) },
+          { text: `PDF notes (${file.name}):\n\n${text.slice(0, 200000)}` },
+        ];
+      } else {
+        // Scanned/image-only PDF or extractor unavailable → send the file itself
+        const b64 = await fileToBase64(file);
+        genLoading(true, "Understanding the material…", "Larger PDFs can take up to a minute.");
+        parts = [
+          { text: genPrompt(Number($("#gen-count").value), subjectById(subjectId)) },
+          { inline_data: { mime_type: "application/pdf", data: b64 } },
+        ];
+      }
     } else {
       const id = youTubeId(state.gen.url);
       genLoading(true, "Watching the video…", "Long videos can take up to a minute.");
@@ -4738,7 +4831,7 @@ async function runGeneration() {
     genLoading(false);
   } catch (err) {
     if (err.name === "AbortError") return; // user left the view
-    genFail(err.message || "Something went wrong while generating.");
+    genFail(err.message || "Something went wrong while generating.", err.retryAfter);
   }
 }
 
@@ -4813,6 +4906,11 @@ function discardGenDraft() {
 
 function genResetPanel() {
   state.gen.draft = null;
+  clearInterval(genRetryTimer);
+  genRetryTimer = null;
+  const retryBtn = $("#btn-gen-retry");
+  retryBtn.disabled = false;
+  retryBtn.textContent = "Try Again";
   $("#gen-review").hidden = true;
   $("#gen-fail").hidden = true;
   $("#gen-loading").hidden = true;

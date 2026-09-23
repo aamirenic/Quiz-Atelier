@@ -175,10 +175,14 @@ const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 let geminiKeyIdx = 0;
-/* Rate-limited keys cool down for a few minutes instead of being retried
-   first on the next call — a hot classroom keeps rotating to fresh keys. */
+/* Rate-limited keys cool down instead of being retried first on the next
+   call — a hot classroom keeps rotating to fresh keys. Quota errors (429)
+   park a key for 3 minutes; capacity blips (503, "model busy") only for
+   30 seconds, since those usually clear within seconds. */
 const GEMINI_COOLDOWN_MS = 3 * 60 * 1000;
+const GEMINI_BUSY_MS = 30 * 1000;
 const geminiCooldownUntil = new Map(); // key -> epoch ms when it may be tried again
+const geminiCooldownLeft = (key) => Math.max(0, (geminiCooldownUntil.get(key) || 0) - Date.now());
 const geminiNextUsableKey = () => {
   const now = Date.now();
   for (let i = 0; i < GEMINI_KEYS.length; i++) {
@@ -227,15 +231,18 @@ async function callGeminiServer(parts, schema, generation = {}) {
       return out;
     } catch (err) {
       if (err.status === 429 || err.status === 503) {
-        // park this key for a few minutes and move to the next fresh one
-        geminiCooldownUntil.set(key, Date.now() + GEMINI_COOLDOWN_MS);
-        console.log(`[gemini] key #${geminiKeyIdx} rate-limited — cooling down ${(GEMINI_COOLDOWN_MS / 60000) | 0} min, rotating`);
+        // park this key and move to the next fresh one (quota: 3 min, busy: 30 s)
+        const ms = err.status === 429 ? GEMINI_COOLDOWN_MS : GEMINI_BUSY_MS;
+        geminiCooldownUntil.set(key, Date.now() + ms);
+        console.log(`[gemini] key #${geminiKeyIdx} ${err.status} — cooldown ${ms >= 60000 ? `${(ms / 60000) | 0} min` : `${(ms / 1000) | 0} s`}, rotating`);
         continue;
       }
       throw err;
     }
   }
-  throw Object.assign(new Error("All AI keys are rate-limited — try again in a few minutes"), { status: 429 });
+  // whole pool cooling — report when the soonest key frees up
+  const retryAfter = Math.ceil(Math.min(...GEMINI_KEYS.map(geminiCooldownLeft)) / 1000);
+  throw Object.assign(new Error("All AI keys are rate-limited — try again in a few minutes"), { status: 429, retryAfter });
 }
 
 const GEN_SCHEMA = {
@@ -489,7 +496,7 @@ async function handleApi(req, res, url) {
     } catch (err) {
       console.error("[ai]", err.status || "", err.message);
       return sendJson(res, err.status && err.status >= 400 && err.status < 600 ? err.status : 502,
-        { error: err.message || "AI request failed" });
+        { error: err.message || "AI request failed", ...(err.retryAfter ? { retryAfter: err.retryAfter } : {}) });
     }
   }
 

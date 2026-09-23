@@ -6,7 +6,7 @@
      workspace sync and AI calls always reflect live state.
    - Everything else (e.g. YouTube thumbnails): network, no caching.
    Bump CACHE_VERSION on every webapp release so clients pick up new builds. */
-const CACHE_VERSION = "qa-v1.7.8";
+const CACHE_VERSION = "qa-v1.7.9";
 const SHELL = [
   "/",
   "/index.html",
