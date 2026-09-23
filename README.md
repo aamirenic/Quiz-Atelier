@@ -103,7 +103,7 @@ copy `quiz-manager/index.html styles.css app.js sw.js` there before building.
 | **Web app** | Vanilla JS, hand-rolled CSS design system, service-worker PWA |
 | **API server** | Node 18+, zero npm dependencies (`http`, `fs`, `crypto`) |
 | **Database** | Single JSON file with atomic, serialized writes |
-| **AI** | Gemini 2.5 Flash via server-side key pool (`/api/ai/generate`) |
+| **AI** | Gemini 3.6 Flash via server-side key pool (`/api/ai/generate`) |
 | **Android** | Kotlin WebView + `WebViewAssetLoader`, bundled web app |
 
 One codebase serves all three surfaces: the webapp is responsive (rail on desktop, tab bar on phones), and the APK is the same app with a couple of origin-gated extras (export/import/delete-account) — divergence is deliberate and minimal.
@@ -163,6 +163,13 @@ so components never know which theme they're in:
 
 Type pairing: an old-style serif for display (Iowan/Palatino stack),
 system sans for UI, monospace for numerals.
+
+## ✦ Credits
+
+| | |
+|---|---|
+| **[RUDRESH-mishra](https://github.com/RUDRESH-mishra)** | Contributor |
+| **[kashishrajbhar](https://github.com/kashishrajbhar)** | Contributor |
 
 ## ✦ License
 
