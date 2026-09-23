@@ -164,13 +164,6 @@ so components never know which theme they're in:
 Type pairing: an old-style serif for display (Iowan/Palatino stack),
 system sans for UI, monospace for numerals.
 
-## ✦ Credits
-
-| | |
-|---|---|
-| **[RUDRESH-mishra](https://github.com/RUDRESH-mishra)** | Contributor |
-| **[kashishrajbhar](https://github.com/kashishrajbhar)** | Contributor |
-
 ## ✦ License
 
 Released under the [MIT License](LICENSE).
