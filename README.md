@@ -1,6 +1,6 @@
 <div align="center">
 
- 🎓 Quiz Atelier
+# 🎓 Quiz Atelier
 
 **A full-stack quiz platform — create, take, and analyze quizzes.**
 
