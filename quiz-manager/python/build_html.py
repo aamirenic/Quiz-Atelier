@@ -100,6 +100,20 @@ def login_gate() -> str:
         'stroke-linejoin="round"><path d="M12 3L2 8l10 5 10-5-10-5z" />'
         '<path d="M6 10.5V16c0 1.5 2.7 2.5 6 2.5s6-1 6-2.5v-5.5" /><path d="M22 8v6" /></svg>'
     )
+    # password visibility toggle: both eyes ship in the button; CSS decides
+    # which one shows (default = closed eye → masked input)
+    eye_open = (
+        '<svg class="pass-eye__open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" />'
+        '<circle cx="12" cy="12" r="2.8" /></svg>'
+    )
+    eye_closed = (
+        '<svg class="pass-eye__closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" />'
+        '<circle cx="12" cy="12" r="2.8" /><path d="M4 4l16 16" /></svg>'
+    )
     return f'''  <!-- ══════════════════ Login gate (choose role → email sign in) ══════════════════ -->
   <div class="role-gate" id="login-gate" hidden>
     <div class="gate-card" role="dialog" aria-modal="true" aria-labelledby="login-title">
@@ -138,8 +152,15 @@ def login_gate() -> str:
         </div>
         <div class="field">
           <label for="login-pass">Password</label>
-          <input class="input" id="login-pass" name="login-pass" type="password"
-                 autocomplete="current-password" placeholder="••••••••" />
+          <div class="pass-wrap">
+            <input class="input" id="login-pass" name="login-pass" type="password"
+                   autocomplete="current-password" placeholder="••••••••" />
+            <button class="pass-eye" type="button" id="btn-pass-eye"
+                    aria-label="Show password" aria-pressed="false">
+              {eye_open}
+              {eye_closed}
+            </button>
+          </div>
           <p class="field-error" id="login-pass-error" hidden>At least 6 characters.</p>
         </div>
         <p class="field-error" id="login-error" role="alert" hidden></p>

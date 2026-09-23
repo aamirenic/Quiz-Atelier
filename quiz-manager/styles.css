@@ -218,6 +218,27 @@ h1, h2, h3, h4 { text-wrap: balance; }
 .field label { font-size: var(--fs-tiny); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .field .opt { color: var(--faint); font-weight: 500; text-transform: none; letter-spacing: 0; }
 
+/* password visibility toggle — wraps the login password field */
+.pass-wrap { position: relative; }
+.pass-wrap .input { padding-right: 44px; }
+.pass-eye {
+  position: absolute; top: 50%; right: 7px; transform: translateY(-50%);
+  display: grid; place-items: center;
+  width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  cursor: pointer; transition: color 0.15s ease, background 0.15s ease;
+}
+.pass-eye:hover { color: var(--fg); background: color-mix(in oklab, var(--fg) 8%, transparent); }
+.pass-eye:focus-visible { outline: var(--ring); outline-offset: 1px; }
+.pass-eye svg { width: 19px; height: 19px; }
+.pass-eye__open { display: none; }
+.pass-eye__closed { display: block; }
+/* unmasking is done by toggling input.type (Chromium's UA sheet force-masks
+   type=password — even !important -webkit-text-security can't beat it) */
+.pass-wrap.revealed .pass-eye__open { display: block; }
+.pass-wrap.revealed .pass-eye__closed { display: none; }
+
 .input {
   width: 100%;
   padding: 10px 12px;

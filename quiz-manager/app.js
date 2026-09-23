@@ -533,12 +533,36 @@ function syncRoster() {
    email sign-in form for that role (new emails become sign-ups). */
 let loginRole = null; // "student" | "teacher" once chosen
 
+/* password visibility toggle: default masked (closed eye); one click reveals
+   the characters, another hides them again */
+function setPasswordRevealed(reveal) {
+  const wrap = $(".pass-wrap");
+  const btn = $("#btn-pass-eye");
+  const input = $("#login-pass");
+  if (!wrap || !btn || !input) return;
+  wrap.classList.toggle("revealed", reveal);
+  input.type = reveal ? "text" : "password"; // Chromium's UA sheet force-masks type=password, so unmask by type toggle
+  btn.setAttribute("aria-pressed", String(reveal));
+  btn.setAttribute("aria-label", reveal ? "Hide password" : "Show password");
+}
+
+function wirePassEye() {
+  const btn = $("#btn-pass-eye");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const reveal = !$(".pass-wrap").classList.contains("revealed");
+    setPasswordRevealed(reveal);
+    $("#login-pass").focus();
+  });
+}
+
 function showLogin() {
   const gate = $("#login-gate");
   if (!gate) return;
   gate.hidden = false;
   syncScrollLock();
   loginRole = null;
+  setPasswordRevealed(false); // reset the eye toggle with a fresh form
   $("#login-title").textContent = "Welcome to Quiz Atelier";
   $("#login-note").textContent = "First, tell us who's here.";
   $("#gate-choices").hidden = false;
@@ -555,6 +579,7 @@ function showLogin() {
 
 function chooseLoginRole(role) {
   loginRole = role;
+  setPasswordRevealed(false);
   $("#login-title").textContent = role === "teacher" ? "Teacher Sign In" : "Student Sign In";
   $("#login-note").textContent =
     role === "teacher"
@@ -1037,6 +1062,7 @@ function wireLogin() {
   $("#gate-student").addEventListener("click", () => chooseLoginRole("student"));
   $("#gate-teacher").addEventListener("click", () => chooseLoginRole("teacher"));
   $("#btn-gate-back").addEventListener("click", showLogin);
+  wirePassEye();
   for (const btn of $$('[data-fill]')) {
     btn.addEventListener("click", () => {
       const acct = DEMO_ACCOUNTS.find((a) => a.role === btn.dataset.fill);

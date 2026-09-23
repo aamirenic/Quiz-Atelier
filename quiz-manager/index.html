@@ -79,8 +79,15 @@
         </div>
         <div class="field">
           <label for="login-pass">Password</label>
-          <input class="input" id="login-pass" name="login-pass" type="password"
-                 autocomplete="current-password" placeholder="••••••••" />
+          <div class="pass-wrap">
+            <input class="input" id="login-pass" name="login-pass" type="password"
+                   autocomplete="current-password" placeholder="••••••••" />
+            <button class="pass-eye" type="button" id="btn-pass-eye"
+                    aria-label="Show password" aria-pressed="false">
+              <svg class="pass-eye__open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="2.8" /></svg>
+              <svg class="pass-eye__closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="2.8" /><path d="M4 4l16 16" /></svg>
+            </button>
+          </div>
           <p class="field-error" id="login-pass-error" hidden>At least 6 characters.</p>
         </div>
         <p class="field-error" id="login-error" role="alert" hidden></p>
